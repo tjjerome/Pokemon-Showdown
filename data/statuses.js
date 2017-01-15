@@ -57,7 +57,9 @@ exports.BattleStatuses = {
 			if (pokemon.hasAbility('earlybird')) {
 				pokemon.statusData.time--;
 			}
-			pokemon.statusData.time--;
+			if (!pokemon.hasAbility('hypersomnia')) {
+				pokemon.statusData.time--;
+			}
 			if (pokemon.statusData.time <= 0) {
 				pokemon.cureStatus();
 				return;
@@ -418,6 +420,13 @@ exports.BattleStatuses = {
 				this.debug('Aura Boost reverted by Aura Break');
 			}
 			return this.chainModify([modifier, 0x1000]);
+		}
+	},
+	quickdraw: {
+		duration: 1,
+		onModifyPriority: function (priority, pokemon, target, move) {
+			if (move.id in {protect:1, detect:1, endure:1, quickguard:1, wideguard:1}) return;
+			return 0;
 		},
 	},
 
@@ -618,6 +627,46 @@ exports.BattleStatuses = {
 		},
 		onWeather: function (target) {
 			this.damage(target.maxhp / 16);
+		},
+		onEnd: function () {
+			this.add('-weather', 'none');
+		},
+	},
+	frostbite: {
+		effectType: 'Weather',
+		duration: 5,
+		durationCallback: function (source, effect) {
+			if (source && source.hasItem('icyrock')) {
+				return 8;
+			}
+			return 5;
+		},
+		onTryMove: function (target, source, effect) {
+			if (effect.category !== 'Status' && effect.type === 'Water' || effect.type === 'Grass') {
+				this.debug('Frost Bite water and grass suppress');
+				this.add('-fail', source, effect, '[from] Frost Bite');
+				return null;
+			}
+		},
+		// This should be applied directly to the stat before any of the other modifiers are chained
+		// So we give it increased priority.
+		onModifyDefPriority: 10,
+		onModifyDef: function (def, pokemon) {
+			if (pokemon.hasType('Ice') && this.isWeather('frostbite')) {
+				return this.modify(def, 1.5);
+			}
+		},
+		onStart: function (battle, source, effect) {
+			if (effect && effect.effectType === 'Ability') {
+				this.add('-weather', 'FrostBite', '[from] ability: ' + effect, '[of] ' + source);
+			} else {
+				this.add('-weather', 'FrostBite');
+			}
+		},
+		onResidualOrder: 1,
+		onResidual: function () {
+			this.add('-weather', 'FrostBite', '[upkeep]');
+			this.eachEvent('Weather');
 		},
 		onEnd: function () {
 			this.add('-weather', 'none');

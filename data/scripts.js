@@ -814,7 +814,7 @@ exports.BattleScripts = {
 		pokemon.baseTemplate = template; // mega evolution is permanent
 		pokemon.details = template.species + (pokemon.level === 100 ? '' : ', L' + pokemon.level) + (pokemon.gender === '' ? '' : ', ' + pokemon.gender) + (pokemon.set.shiny ? ', shiny' : '');
 		if (pokemon.illusion) {
-			pokemon.ability = ''; // Don't allow Illusion to wear off
+			//pokemon.ability = ''; // Don't allow Illusion to wear off
 			this.add('-mega', pokemon, pokemon.illusion.template.baseSpecies, template.requiredItem);
 		} else {
 			this.add('detailschange', pokemon, pokemon.details);
