@@ -581,14 +581,32 @@ exports.Formats = [
 		ruleset: ['Pokemon', 'Standard', 'Team Preview'],
 		banlist: ['Illegal', 'Unreleased'],
 		onValidateTeam: function (team) {
+			let uber;
 			let n = 0;
 			for (let i = 0; i < team.length; i++) {
 				let template = this.getTemplate(team[i].species);
-				if (template.tier === 'Uber' || template.tier === 'Bank-Uber') n++;
-				if (n === 0 ) return ["You must use exactly one Uber Pok\u00E9mon."];
-				if (n > 1 ) return ["You cannot have more than one Uber Pok\u00E9mon."];
+				if (template.tier === 'Uber' || template.tier === 'Bank-Uber') {
+					n++;
+					uber = template;
+				}
+			}
+			if (n === 0 ) return ["You must use exactly one Uber Pok\u00E9mon."];
+			if (n > 1 ) return ["You cannot have more than one Uber Pok\u00E9mon."];
+			let typeTable;
+			for (let i = 0; i < team.length; i++) {
+				typeTable = uber.types;
+				let template = this.getTemplate(team[i].species);
+				typeTable = typeTable.filter(type => template.types.indexOf(type) >= 0);
+				if (!typeTable.length) return [template.species + " does not share a type with " + uber.species];
 			}
 		},
+	},
+	{
+		name: "[Gen 7] Placeholder Format - Tyler",
+
+		mod: 'gen7',
+		team: 'randomHC',
+		ruleset: ['Pokemon', 'Sleep Clause Mod', 'HP Percentage Mod', 'Cancel Mod'],
 	},
 	{
 		name: "[Gen 7] Random Battle - Drew",
