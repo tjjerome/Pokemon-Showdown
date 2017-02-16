@@ -456,8 +456,6 @@ exports.Formats = [
 		],
 	},
 	{
-<<<<<<< HEAD
-=======
 		name: "[Gen 7] Mix and Mega",
 		desc: [
 			"Mega Stones and Primal Orbs can be used on almost any fully evolved Pok&eacute;mon with no Mega Evolution limit.",
@@ -518,7 +516,6 @@ exports.Formats = [
 		},
 	},
 	{
->>>>>>> af6035ba8bb20839cf9b3b6b018298053b69ee0c
 		name: "[Gen 7] Almost Any Ability",
 		desc: [
 			"Pok&eacute;mon can use any ability, barring the few that are banned.",
@@ -699,7 +696,7 @@ exports.Formats = [
 
 		mod: 'mixandmega',
 		ruleset: ['Pokemon', 'Standard', 'Swagger Clause', 'Mega Rayquaza Clause', 'Team Preview'],
-		banlist: ['Baton Pass'],
+		banlist: ['Baton Pass', 'Bidoof', 'Bibarel', 'Burmy', 'Wormadam', 'Mothim', 'Delibird'],
 		onValidateTeam: function (team) {
 			let itemTable = {};
 			for (let i = 0; i < team.length; i++) {
@@ -777,11 +774,92 @@ exports.Formats = [
 		},
 	},
 	{
-		name: "[Gen 7] Placeholder Format - Tyler",
+		name: "[Gen 7] Generation Battle (Singles) - Tyler",
 
 		mod: 'gen7',
-		team: 'randomHC',
-		ruleset: ['Pokemon', 'Sleep Clause Mod', 'HP Percentage Mod', 'Cancel Mod'],
+		ruleset: ['Pokemon', 'Standard', 'Team Preview'],
+		banlist: ['Illegal', 'Unreleased'],
+		onValidateTeam: function (team) {
+			var gens = [0];
+			let n = 0;
+			for (let i = 0; i < team.length; i++) {
+				let template = this.getTemplate(team[i].species);
+				if (template.forme === 'Alola') {
+					n = 7;
+				}
+				else if (template.num < 152) {
+					n = 1
+				}
+				else if (template.num < 252) {
+					n = 2
+				}
+				else if (template.num < 387) {
+					n = 3
+				}
+				else if (template.num < 494) {
+					n = 4
+				}
+				else if (template.num < 650) {
+					n = 5
+				}
+				else if (template.num < 722) {
+					n = 6
+				}
+				else if (template.num < 803) {
+					n = 7
+				}
+				for (let j = 0; j < gens.length; j++) {
+					if (gens[j] === n) {
+						return ['You may not have more than one Pok\u00E9mon from each generation.']
+					}
+				}
+				gens.push(n);
+			}
+		},
+	},
+	{
+		name: "[Gen 7] Generation Battle (Doubles) - Tyler",
+
+		mod: 'gen7',
+		ruleset: ['Pokemon', 'Standard', 'Team Preview'],
+		banlist: ['Illegal', 'Unreleased'],
+		onValidateTeam: function (team) {
+			var gens = [0];
+			let n = 0;
+			for (let i = 0; i < team.length; i++) {
+				let template = this.getTemplate(team[i].species);
+				if (template.forme === 'Alola') {
+					n = 7;
+				}
+				else if (template.num < 152) {
+					n = 1
+				}
+				else if (template.num < 252) {
+					n = 2
+				}
+				else if (template.num < 387) {
+					n = 3
+				}
+				else if (template.num < 494) {
+					n = 4
+				}
+				else if (template.num < 650) {
+					n = 5
+				}
+				else if (template.num < 722) {
+					n = 6
+				}
+				else if (template.num < 803) {
+					n = 7
+				}
+				for (let j = 0; j < gens.length; j++) {
+					if (gens[j] === n) {
+						return ['You may not have more than one Pok\u00E9mon from each generation.']
+					}
+				}
+				gens.push(n);
+			}
+		},
 	},
 	{
 		name: "[Gen 7] Random Battle - Drew",
