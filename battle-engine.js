@@ -971,7 +971,7 @@ class BattlePokemon {
 		return false;
 	}
 	useItem(item, source, sourceEffect) {
-		if (!this.hp || !this.isActive) return false;
+		if ((!this.hp && !this.getItem().isGem) || !this.isActive) return false;
 		if (!this.item) return false;
 
 		let id = toId(item);
@@ -2427,9 +2427,7 @@ class Battle extends Tools.BattleDex {
 			return Math.random() - 0.5;
 		});
 		for (let i = 0; i < actives.length; i++) {
-			if (actives[i].isStarted) {
-				this.runEvent(eventid, actives[i], null, effect, relayVar);
-			}
+			this.runEvent(eventid, actives[i], null, effect, relayVar);
 		}
 	}
 	residualEvent(eventid, relayVar) {
@@ -2679,6 +2677,7 @@ class Battle extends Tools.BattleDex {
 					TryMove: 1,
 					Boost: 1,
 					DragOut: 1,
+					Effectiveness: 1,
 				};
 				if (eventid in AttackingEvents) {
 					this.debug(eventid + ' handler suppressed by Mold Breaker');
@@ -4173,15 +4172,15 @@ class Battle extends Tools.BattleDex {
 
 			decision.move = this.getMoveCopy(decision.move);
 			if (!decision.priority && !deferPriority) {
-				let priority = decision.move.priority;
+				let move = decision.move;
 				if (decision.zmove) {
 					let zMoveName = this.getZMove(decision.move, decision.pokemon, true);
 					let zMove = this.getMove(zMoveName);
 					if (zMove.exists) {
-						priority = zMove.priority;
+						move = zMove;
 					}
 				}
-				priority = this.runEvent('ModifyPriority', decision.pokemon, target, decision.move, priority);
+				let priority = this.runEvent('ModifyPriority', decision.pokemon, target, move, move.priority);
 				decision.priority = priority;
 				// In Gen 6, Quick Guard blocks moves with artificially enhanced priority.
 				if (this.gen > 5) decision.move.priority = priority;

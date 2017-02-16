@@ -1234,9 +1234,11 @@ exports.commands = {
 		connection.popup(buffer.join("\n\n"));
 	},
 
-	rb: 'roomban',
-	roomban: function (target, room, user, connection) {
-		if (!target) return this.parse('/help roomban');
+	rb: 'ban',
+	roomban: 'ban',
+	b: 'ban',
+	ban: function (target, room, user, connection) {
+		if (!target) return this.parse('/help ban');
 		if (!this.canTalk()) return;
 
 		target = this.splitTarget(target);
@@ -1286,10 +1288,11 @@ exports.commands = {
 		Punishments.roomBan(room, targetUser, null, null, target);
 		return true;
 	},
-	roombanhelp: ["/roomban [username], [reason] - Bans the user from the room you are in. Requires: @ # & ~"],
+	banhelp: ["/roomban [username], [reason] - Bans the user from the room you are in. Requires: @ # & ~"],
 
-	unroomban: 'roomunban',
-	roomunban: function (target, room, user, connection) {
+	unroomban: 'unban',
+	roomunban: 'unban',
+	unban: function (target, room, user, connection) {
 		if (!target) return this.parse('/help unban');
 		if (!this.can('ban', null, room)) return false;
 
@@ -1304,14 +1307,14 @@ exports.commands = {
 			this.errorReply("User '" + target + "' is not banned.");
 		}
 	},
-	roomunbanhelp: ["/roomunban [username] - Unbans the user from the room you are in. Requires: @ # & ~"],
+	unbanhelp: ["/roomunban [username] - Unbans the user from the room you are in. Requires: @ # & ~"],
 
 	'!autojoin': true,
 	autojoin: function (target, room, user, connection) {
-		Rooms.global.autojoinRooms(user, connection);
 		let targets = target.split(',');
-		let autojoins = [];
 		if (targets.length > 11 || connection.inRooms.size > 1) return;
+		Rooms.global.autojoinRooms(user, connection);
+		let autojoins = [];
 		for (let i = 0; i < targets.length; i++) {
 			if (user.tryJoinRoom(targets[i], connection) === null) {
 				autojoins.push(targets[i]);
@@ -2063,23 +2066,24 @@ exports.commands = {
 		let targetUser = this.targetUser;
 
 		if (!targetUser) {
-			return this.errorReply("User '" + this.targetUsername + "' not found.");
+			return this.errorReply(`User '${this.targetUsername}' not found.`);
 		}
 		if (!this.can('forcerename', targetUser)) return false;
-		if (targetUser.namelocked) return this.errorReply("User '" + target + "' is already namelocked.");
+		if (targetUser.namelocked) return this.errorReply(`User '${target}' is already namelocked.`);
 
-		let lockMessage = "" + targetUser.name + " was namelocked by " + user.name + "." + (reason ? " (" + reason + ")" : "");
-		this.addModCommand(lockMessage);
+		let reasonText = reason ? ` (${reason})` : `.`;
+		let lockMessage = `${targetUser.name} was namelocked by ${user.name}${reasonText}`;
+		this.addModCommand(lockMessage, `(${targetUser.latestIp})`);
 
 		// Notify staff room when a user is locked outside of it.
 		if (room.id !== 'staff' && Rooms('staff')) {
 			Rooms('staff').addLogMessage(user, "<<" + room.id + ">> " + lockMessage);
 		}
 
-		this.globalModlog("NAMELOCK", targetUser, " by " + user.name + (reason ? ": " + reason : ""));
+		this.globalModlog("NAMELOCK", targetUser, ` by ${user.name}${reasonText}`);
 		Rooms.global.cancelSearch(targetUser);
 		Punishments.namelock(targetUser, null, null, reason);
-		targetUser.popup("|modal|" + user.name + " has locked your name and you can't change names anymore" + (reason ? ": " + reason : "."));
+		targetUser.popup(`|modal|${user.name} has locked your name and you can't change names anymore${reasonText}`);
 		return true;
 	},
 	namelockhelp: ["/namelock OR /nl [username], [reason] - Name locks a user and shows them the [reason]. Requires: % @ * & ~"],
@@ -2590,12 +2594,15 @@ exports.commands = {
 
 	savelearnsets: function (target, room, user) {
 		if (!this.can('hotpatch')) return false;
-		fs.writeFile('data/learnsets.js', 'exports.BattleLearnsets = ' + JSON.stringify(Tools.data.Learnsets) + ";\n");
-		this.sendReply("learnsets.js saved.");
+		this.sendReply("saving...");
+		fs.writeFile('data/learnsets.js', 'exports.BattleLearnsets = ' + JSON.stringify(Tools.data.Learnsets) + ";\n", () => {
+			this.sendReply("learnsets.js saved.");
+		});
 	},
 
 	adddatacenters: function (target, room, user) {
 		if (!this.can('hotpatch')) return false;
+		// should be in the format: IP, IP, name, URL
 
 		fs.readFile(require('path').resolve(__dirname, 'config/datacenters.csv'), (err, data) => {
 			if (err) return;
