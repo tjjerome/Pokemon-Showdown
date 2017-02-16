@@ -506,7 +506,7 @@ exports.Formats = [
             if (!template.prevo || !template.nfe) {
                 return [set.species + " is not the middle Pokémon in an evolution chain."];
             }
-            if (set.species === 'Porygon2' || set.species === 'Dusclops') {
+            if (set.species === 'Porygon2' || set.species === 'Dusclops' || set.species === 'Chansey') {
             	if (set.item === 'Eviolite') {
             		return [set.species + " may not hold an Eviolite"]
             	}
@@ -575,7 +575,7 @@ exports.Formats = [
 		},
 	},
 	{
-		name: "[Gen 7] Uber Battle - Brandon",
+		name: "[Gen 7] Gods and Followers - Brandon",
 
 		mod: 'gen7',
 		ruleset: ['Pokemon', 'Standard', 'Team Preview'],
