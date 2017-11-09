@@ -423,7 +423,6 @@ exports.BattleStatuses = {
 			return this.chainModify([0x14CD, 0x1000]);
 		},
 	},
-<<<<<<< HEAD
 	aura: {
 		duration: 1,
 		onBasePowerPriority: 8,
@@ -444,8 +443,6 @@ exports.BattleStatuses = {
 			return 0;
 		},
 	},
-=======
->>>>>>> 710d47d7fa78703de2a1016259788f1f92fa7900
 
 	// weather is implemented here since it's so important to the game
 
