@@ -131,6 +131,21 @@ exports.BattleAbilities = {
 		rating: 2,
 		num: 148,
 	},
+	"anchor": {
+		desc: "This Pokemon receives 1/2 damage from contact moves, but double damage from Fire moves.",
+		shortDesc: "This Pokemon takes 1/2 damage from contact moves, 2x damage from Fire moves.",
+		// TODO: are either of these effects actually base power modifiers?
+		onSourceModifyDamage: function (damage, source, target, move) {
+			let mod = 1;
+			if (move.type === 'Ground') mod *= 2;
+			if (move.flags['contact']) mod /= 2;
+			return this.chainModify(mod);
+		},
+		id: "anchor",
+		name: "Anchor",
+		rating: 2.5,
+		num: 218,
+	},
 	"angerpoint": {
 		desc: "If this Pokemon, but not its substitute, is struck by a critical hit, its Attack is raised by 12 stages.",
 		shortDesc: "If this Pokemon (not its substitute) takes a critical hit, its Attack is raised 12 stages.",
@@ -1423,6 +1438,25 @@ exports.BattleAbilities = {
 		rating: 1,
 		num: 82,
 	},
+	"godlike": {
+		desc: "Pokemon making contact with this Pokemon have a 20% chance to be forcibly switched out.",
+		shortDesc: "Pokemon making contact may be switched out.",
+		onAfterMoveSecondary: function (target, source, move) {
+			if (source && source !== target && source.hp && target.hp && move && move.category !== 'Status' && move.flags['contact']) {
+				if (!source.isActive || !this.canSwitch(source.side) || source.forceSwitchFlag || target.forceSwitchFlag) return;
+				if (this.random(5) !== 0) return;
+				if (target.useItem(null, source)) { // This order is correct - the item is used up even against a pokemon with Ingrain or that otherwise can't be forced out
+					if (this.runEvent('DragOut', source, target, move)) {
+						source.forceSwitchFlag = true;
+					}
+				}
+			}
+		},
+		id: "godlike",
+		name: "Godlike",
+		rating: 3,
+		num: 160,
+	},
 	"gooey": {
 		shortDesc: "Pokemon making contact with this Pokemon have their Speed lowered by 1 stage.",
 		onAfterDamage: function (damage, target, source, effect) {
@@ -2193,6 +2227,24 @@ exports.BattleAbilities = {
 		rating: 0,
 		num: 58,
 	},
+	"mirage": {
+		desc: "After another Pokemon uses a stat boosting move, this Pokemon has a 50% chance to use the same move. Moves used by this Ability cannot be copied again.",
+		shortDesc: "After another Pokemon uses a boosting move, this Pokemon may use the same move.",
+		id: "mirage",
+		onAnyAfterMove: function (source, target, move) {
+			if (!this.effectData.target.hp || source === this.effectData.target) return;
+			if (move.category === 'Status' && move.boosts) {
+				this.faintMessages();
+				if(this.random(2) < 1) {
+					this.add('-activate', this.effectData.target, 'ability: Dancer');
+					this.useMove(move, this.effectData.target);
+				}
+			}
+		},
+		name: "Mirage",
+		rating: 2.5,
+		num: 216,
+	},
 	"mistysurge": {
 		shortDesc: "On switch-in, this Pokemon summons Misty Terrain.",
 		onStart: function (source) {
@@ -2955,6 +3007,18 @@ exports.BattleAbilities = {
 		rating: 2.5,
 		num: 95,
 	},
+	"raginganger": {
+		shortDesc: "This Pokemon's Attaack is raised by 1 stage after it is damaged by a move.",
+		onAfterDamage: function (damage, target, source, effect) {
+			if (effect && effect.effectType === 'Move' && effect.id !== 'confused') {
+				this.boost({atk:1});
+			}
+		},
+		id: "raginganger",
+		name: "Raging Anger",
+		rating: 1.5,
+		num: 192,
+	},
 	"raindish": {
 		desc: "If Rain Dance is active, this Pokemon restores 1/16 of its maximum HP, rounded down, at the end of each turn.",
 		shortDesc: "If Rain Dance is active, this Pokemon heals 1/16 of its max HP each turn.",
@@ -3709,6 +3773,21 @@ exports.BattleAbilities = {
 		name: "Steadfast",
 		rating: 1,
 		num: 80,
+	},
+	"steelskin": {
+		desc: "This Pokemon receives 1/2 damage from contact moves, but double damage from Fire moves.",
+		shortDesc: "This Pokemon takes 1/2 damage from contact moves, 2x damage from Fire moves.",
+		// TODO: are either of these effects actually base power modifiers?
+		onSourceModifyDamage: function (damage, source, target, move) {
+			let mod = 1;
+			if (move.type === 'Fire') mod *= 2;
+			if (move.flags['contact']) mod /= 2;
+			return this.chainModify(mod);
+		},
+		id: "steelskin",
+		name: "Steel Skin",
+		rating: 2.5,
+		num: 218,
 	},
 	"steelworker": {
 		shortDesc: "This Pokemon's Steel-type attacks have their power multiplied by 1.5.",
