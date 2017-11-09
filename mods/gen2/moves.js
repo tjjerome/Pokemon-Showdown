@@ -9,6 +9,16 @@ exports.BattleMovedex = {
 		inherit: true,
 		critRatio: 3,
 	},
+	beatup: {
+		inherit: true,
+		desc: "Deals typeless damage. Hits one time for each unfainted Pokemon without a major status condition in the user's party. For each hit, the damage formula uses the participating Pokemon's level, its base Attack as the Attack stat, the target's base Defense as the Defense stat, and ignores stat stages and other effects that modify Attack or Defense. Fails if no party members can participate.",
+		onModifyMove: function (move, pokemon) {
+			move.type = '???';
+			move.category = 'Physical';
+			move.allies = pokemon.side.pokemon.filter(ally => !ally.fainted && !ally.status);
+			move.multihit = move.allies.length;
+		},
+	},
 	bellydrum: {
 		inherit: true,
 		onHit: function (target) {
@@ -118,6 +128,9 @@ exports.BattleMovedex = {
 	},
 	dig: {
 		inherit: true,
+		onPrepareHit: function (target, source) {
+			return source.status !== 'slp';
+		},
 		effect: {
 			duration: 2,
 			onImmunity: function (type, pokemon) {
@@ -126,6 +139,10 @@ exports.BattleMovedex = {
 			onAccuracy: function (accuracy, target, source, move) {
 				if (move.id === 'earthquake' || move.id === 'magnitude' || move.id === 'fissure') {
 					return;
+				}
+				if (['attract', 'curse', 'foresight', 'meanlook', 'mimic', 'nightmare', 'spiderweb', 'transform'].includes(move.id)) {
+					// Oversight in the interaction between these moves and the Lock-On effect
+					return 0;
 				}
 				if (source.volatiles['lockon'] && target === source.volatiles['lockon'].source) return;
 				return 0;
@@ -206,11 +223,22 @@ exports.BattleMovedex = {
 	},
 	fly: {
 		inherit: true,
+		onPrepareHit: function (target, source) {
+			return source.status !== 'slp';
+		},
 		effect: {
 			duration: 2,
 			onAccuracy: function (accuracy, target, source, move) {
 				if (move.id === 'gust' || move.id === 'twister' || move.id === 'thunder' || move.id === 'whirlwind') {
 					return;
+				}
+				if (move.id === 'earthquake' || move.id === 'magnitude' || move.id === 'fissure') {
+					// These moves miss even during the Lock-On effect
+					return 0;
+				}
+				if (['attract', 'curse', 'foresight', 'meanlook', 'mimic', 'nightmare', 'spiderweb', 'transform'].includes(move.id)) {
+					// Oversight in the interaction between these moves and the Lock-On effect
+					return 0;
 				}
 				if (source.volatiles['lockon'] && target === source.volatiles['lockon'].source) return;
 				return 0;
@@ -312,52 +340,25 @@ exports.BattleMovedex = {
 	},
 	metronome: {
 		inherit: true,
-		onHit: function (target) {
-			let moves = [];
-			for (let i in exports.BattleMovedex) {
-				let move = exports.BattleMovedex[i];
-				if (i !== move.id) continue;
-				if (move.isNonstandard) continue;
-				let noMetronome = {
-					counter:1, destinybond:1, detect:1, endure:1, metronome:1, mimic:1, mirrorcoat:1, protect:1, sketch:1, sleeptalk:1, struggle:1, thief:1,
-				};
-				if (!noMetronome[move.id] && move.num < 252) {
-					moves.push(move.id);
-				}
-			}
-			let randomMove = '';
-			if (moves.length) randomMove = moves[this.random(moves.length)];
-			if (!randomMove) return false;
-			this.useMove(randomMove, target);
-		},
+		noMetronome: {counter:1, destinybond:1, detect:1, endure:1, metronome:1, mimic:1, mirrorcoat:1, protect:1, sketch:1, sleeptalk:1, struggle:1, thief:1},
 		noSketch: true,
-	},
-	mirrorcoat: {
-		inherit: true,
-		effect: {
-			duration: 1,
-			noCopy: true,
-			onStart: function (target, source, source2, move) {
-				this.effectData.position = null;
-				this.effectData.damage = 0;
-			},
-			onRedirectTarget: function (target, source, source2) {
-				if (source !== this.effectData.target) return;
-				return source.side.foe.active[this.effectData.position];
-			},
-			onDamagePriority: -101,
-			onDamage: function (damage, target, source, effect) {
-				if (effect && effect.effectType === 'Move' && source.side !== target.side && this.getCategory(effect.id) === 'Special' && target.lastMove !== 'sleeptalk') {
-					this.effectData.position = source.position;
-					this.effectData.damage = 2 * damage;
-				}
-			},
-		},
-		priority: -1,
 	},
 	mimic: {
 		inherit: true,
 		noSketch: true,
+	},
+	mirrorcoat: {
+		inherit: true,
+		damageCallback: function (pokemon, target) {
+			if (pokemon.lastAttackedBy && pokemon.lastAttackedBy.thisTurn && this.getCategory(pokemon.lastAttackedBy.move) === 'Special' && this.getMove(pokemon.lastAttackedBy.move).id !== 'hiddenpower' && target.lastMove !== 'sleeptalk') {
+				return 2 * pokemon.lastAttackedBy.damage;
+			}
+			return false;
+		},
+		beforeTurnCallback: function () {},
+		onTryHit: function () {},
+		effect: {},
+		priority: -1,
 	},
 	mirrormove: {
 		inherit: true,
@@ -472,6 +473,9 @@ exports.BattleMovedex = {
 		inherit: true,
 		accuracy: 75,
 		critRatio: 3,
+		onPrepareHit: function (target, source) {
+			return source.status !== 'slp';
+		},
 	},
 	reflect: {
 		inherit: true,
@@ -527,9 +531,18 @@ exports.BattleMovedex = {
 			this.add('-nothing');
 		},
 	},
+	skullbash: {
+		inherit: true,
+		onPrepareHit: function (target, source) {
+			return source.status !== 'slp';
+		},
+	},
 	skyattack: {
 		inherit: true,
 		critRatio: 1,
+		onPrepareHit: function (target, source) {
+			return source.status !== 'slp';
+		},
 		secondary: {},
 	},
 	slash: {
@@ -543,10 +556,9 @@ exports.BattleMovedex = {
 			for (let i = 0; i < pokemon.moveset.length; i++) {
 				let move = pokemon.moveset[i].id;
 				let NoSleepTalk = {
-					bide:1, dig:1, fly:1, metronome:1, mirrormove:1,
-					skullbash:1, skyattack:1, sleeptalk:1, solarbeam:1, razorwind:1,
+					bide:1, sleeptalk:1,
 				};
-				if (move && !NoSleepTalk[move]) {
+				if (move && !NoSleepTalk[move] && !this.getMove(move).flags['charge']) {
 					moves.push(move);
 				}
 			}
@@ -559,6 +571,9 @@ exports.BattleMovedex = {
 	},
 	solarbeam: {
 		inherit: true,
+		onPrepareHit: function (target, source) {
+			return source.status !== 'slp';
+		},
 		// Rain weakening done directly in the damage formula
 		onBasePower: function () {},
 	},
@@ -698,6 +713,11 @@ exports.BattleMovedex = {
 				}
 			},
 		},
+	},
+	triplekick: {
+		inherit: true,
+		multiaccuracy: false,
+		multihit: [1, 3],
 	},
 	whirlwind: {
 		inherit: true,

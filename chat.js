@@ -25,8 +25,6 @@ To reload chat commands:
 
 'use strict';
 
-let Chat = module.exports;
-
 const MAX_MESSAGE_LENGTH = 300;
 
 const BROADCAST_COOLDOWN = 20 * 1000;
@@ -37,8 +35,13 @@ const MAX_PARSE_RECURSION = 10;
 const VALID_COMMAND_TOKENS = '/!';
 const BROADCAST_TOKEN = '!';
 
-const fs = require('fs');
-const path = require('path');
+const FS = require('./fs');
+
+let Chat = module.exports;
+
+// Matches U+FE0F and all Emoji_Presentation characters. More details on
+// http://www.unicode.org/Public/emoji/5.0/emoji-data.txt
+const emojiRegex = /[\u231A\u231B\u23E9-\u23EC\u23F0\u23F3\u25FD\u25FE\u2614\u2615\u2648-\u2653\u267F\u2693\u26A1\u26AA\u26AB\u26BD\u26BE\u26C4\u26C5\u26CE\u26D4\u26EA\u26F2\u26F3\u26F5\u26FA\u26FD\u2705\u270A\u270B\u2728\u274C\u274E\u2753-\u2755\u2757\u2795-\u2797\u27B0\u27BF\u2B1B\u2B1C\u2B50\u2B55\uFE0F\u{1F004}\u{1F0CF}\u{1F18E}\u{1F191}-\u{1F19A}\u{1F1E6}-\u{1F1FF}\u{1F201}\u{1F21A}\u{1F22F}\u{1F232}-\u{1F236}\u{1F238}-\u{1F23A}\u{1F250}\u{1F251}\u{1F300}-\u{1F320}\u{1F32D}-\u{1F335}\u{1F337}-\u{1F37C}\u{1F37E}-\u{1F393}\u{1F3A0}-\u{1F3CA}\u{1F3CF}-\u{1F3D3}\u{1F3E0}-\u{1F3F0}\u{1F3F4}\u{1F3F8}-\u{1F43E}\u{1F440}\u{1F442}-\u{1F4FC}\u{1F4FF}-\u{1F53D}\u{1F54B}-\u{1F54E}\u{1F550}-\u{1F567}\u{1F57A}\u{1F595}\u{1F596}\u{1F5A4}\u{1F5FB}-\u{1F64F}\u{1F680}-\u{1F6C5}\u{1F6CC}\u{1F6D0}-\u{1F6D2}\u{1F6EB}\u{1F6EC}\u{1F6F4}-\u{1F6F8}\u{1F910}-\u{1F93A}\u{1F93C}-\u{1F93E}\u{1F940}-\u{1F945}\u{1F947}-\u{1F94C}\u{1F950}-\u{1F96B}\u{1F980}-\u{1F997}\u{1F9C0}\u{1F9D0}-\u{1F9E6}]/u;
 
 class PatternTester {
 	// This class sounds like a RegExp
@@ -46,10 +49,16 @@ class PatternTester {
 	// However, ES2016 RegExp subclassing is a can of worms, and it wouldn't allow us
 	// to tailor the test method for fast command parsing.
 	constructor() {
+		/** @type {string[]} */
 		this.elements = [];
+		/** @type {Set<string>} */
 		this.fastElements = new Set();
+		/** @type {?RegExp} */
 		this.regexp = null;
 	}
+	/**
+	 * @param {string} elem
+	 */
 	fastNormalize(elem) {
 		return elem.slice(0, -1);
 	}
@@ -59,15 +68,21 @@ class PatternTester {
 			this.regexp = new RegExp('^(' + slowElements.map(elem => '(?:' + elem + ')').join('|') + ')', 'i');
 		}
 	}
+	/**
+	 * @param {string[]} elems
+	 */
 	register(...elems) {
-		for (let elem of elems) {
+		for (const elem of elems) {
 			this.elements.push(elem);
-			if (/^[^ \^\$\?\|\(\)\[\]]+ $/.test(elem)) {
+			if (/^[^ ^$?|()[\]]+ $/.test(elem)) {
 				this.fastElements.add(this.fastNormalize(elem));
 			}
 		}
 		this.update();
 	}
+	/**
+	 * @param {string} text
+	 */
 	test(text) {
 		const spaceIndex = text.indexOf(' ');
 		if (this.fastElements.has(spaceIndex >= 0 ? text.slice(0, spaceIndex) : text)) {
@@ -88,10 +103,78 @@ Chat.baseCommands = undefined;
 Chat.commands = undefined;
 
 /*********************************************************
+ * Load chat filters
+ *********************************************************/
+Chat.filters = [];
+Chat.filter = function (message, user, room, connection, targetUser) {
+	// Chat filters can choose to:
+	// 1. return false OR null - to not send a user's message
+	// 2. return an altered string - to alter a user's message
+	// 3. return undefined to send the original message through
+	const originalMessage = message;
+	for (const filter of Chat.filters) {
+		const output = filter.call(this, message, user, room, connection, targetUser, originalMessage);
+		if (output !== undefined) message = output;
+		if (!message) return message;
+	}
+
+	return message;
+};
+Chat.namefilters = [];
+Chat.namefilter = function (name, user) {
+	if (!Config.disablebasicnamefilter) {
+		// whitelist
+		// \u00A1-\u00BF\u00D7\u00F7  Latin punctuation/symbols
+		// \u02B9-\u0362              basic combining accents
+		// \u2012-\u2027\u2030-\u205E Latin punctuation/symbols extended
+		// \u2050-\u205F              fractions extended
+		// \u2190-\u23FA\u2500-\u2BD1 misc symbols
+		// \u2E80-\u32FF              CJK symbols
+		// \u3400-\u9FFF              CJK
+		// \uF900-\uFAFF\uFE00-\uFE6F CJK extended
+		name = name.replace(/[^a-zA-Z0-9 /\\.~()<>^*%&=+$@#_'?!"\u00A1-\u00BF\u00D7\u00F7\u02B9-\u0362\u2012-\u2027\u2030-\u205E\u2050-\u205F\u2190-\u23FA\u2500-\u2BD1\u2E80-\u32FF\u3400-\u9FFF\uF900-\uFAFF\uFE00-\uFE6F-]+/g, '');
+
+		// blacklist
+		// \u00a1 upside-down exclamation mark (i)
+		// \u2580-\u2590 black bars
+		// \u25A0\u25Ac\u25AE\u25B0 black bars
+		// \u534d\u5350 swastika
+		// \u2a0d crossed integral (f)
+		name = name.replace(/[\u00a1\u2580-\u2590\u25A0\u25Ac\u25AE\u25B0\u2a0d\u534d\u5350]/g, '');
+		// e-mail address
+		if (name.includes('@') && name.includes('.')) return '';
+	}
+	name = name.replace(/^[^A-Za-z0-9]+/, ""); // remove symbols from start
+
+	// cut name length down to 18 chars
+	if (/[A-Za-z0-9]/.test(name.slice(18))) {
+		name = name.replace(/[^A-Za-z0-9]+/g, "");
+	} else {
+		name = name.slice(0, 18);
+	}
+
+	name = Dex.getName(name);
+	for (const filter of Chat.namefilters) {
+		name = filter(name, this);
+		if (!name) return '';
+	}
+	return name;
+};
+Chat.hostfilters = [];
+Chat.hostfilter = function (host, user, connection) {
+	for (const filter of Chat.hostfilters) {
+		filter(host, user, connection);
+	}
+};
+
+/*********************************************************
  * Parser
  *********************************************************/
 
 class CommandContext {
+	/**
+	 * @param {{message: string, room: Room, user: User, connection: Connection, pmTarget?: User, cmd: string, cmdToken: string, target: string, fullCmd: string}} options
+	 */
 	constructor(options) {
 		this.message = options.message || ``;
 		this.recursionDepth = 0;
@@ -114,6 +197,10 @@ class CommandContext {
 		this.inputUsername = "";
 	}
 
+	/**
+	 * @param {any} [message]
+	 * @return {any}
+	 */
 	parse(message) {
 		if (message) {
 			// spawn subcontext
@@ -168,12 +255,7 @@ class CommandContext {
 
 		if (message && message !== true && typeof message.then !== 'function') {
 			if (this.pmTarget) {
-				let buf = `|pm|${this.user.getIdentity()}|${this.pmTarget.getIdentity()}|${message}`;
-				this.user.send(buf);
-				if (this.pmTarget !== this.user) this.pmTarget.send(buf);
-
-				this.pmTarget.lastPM = this.user.userid;
-				this.user.lastPM = this.pmTarget.userid;
+				Chat.sendPM(message, this.user, this.pmTarget);
 			} else {
 				this.room.add(`|c|${this.user.getIdentity(this.room.id)}|${message}`);
 			}
@@ -183,7 +265,13 @@ class CommandContext {
 
 		return message;
 	}
-	splitCommand(message = this.message, recursing) {
+
+	/**
+	 * @param {string} message
+	 * @param {boolean} recursing
+	 * @return string
+	 */
+	splitCommand(message = this.message, recursing = false) {
 		this.cmd = '';
 		this.cmdToken = '';
 		this.target = '';
@@ -298,7 +386,7 @@ class CommandContext {
 				message: this.message,
 			});
 			Rooms.global.reportCrash(err);
-			this.sendReply(`|html|<div class="broadcast-red"><b>Pokemon Showdown crashed!</b><br />Don't worry, we\'re working on fixing it.</div>`);
+			this.sendReply(`|html|<div class="broadcast-red"><b>Pokemon Showdown crashed!</b><br />Don't worry, we're working on fixing it.</div>`);
 		}
 		if (result === undefined) result = false;
 
@@ -307,7 +395,8 @@ class CommandContext {
 
 	checkFormat(room, user, message) {
 		if (!room) return true;
-		if (!room.filterStretching && !room.filterCaps) return true;
+		if (!room.filterStretching && !room.filterCaps && !room.filterEmojis) return true;
+		if (user.can('bypassall')) return true;
 
 		if (room.filterStretching && user.name.match(/(.+?)\1{5,}/i)) {
 			return this.errorReply(`Your username contains too much stretching, which this room doesn't allow.`);
@@ -315,14 +404,20 @@ class CommandContext {
 		if (room.filterCaps && user.name.match(/[A-Z\s]{6,}/)) {
 			return this.errorReply(`Your username contains too many capital letters, which this room doesn't allow.`);
 		}
+		if (room.filterEmojis && user.name.match(emojiRegex)) {
+			return this.errorReply(`Your username contains emojis, which this room doesn't allow.`);
+		}
 		// Removes extra spaces and null characters
 		message = message.trim().replace(/[ \u0000\u200B-\u200F]+/g, ' ');
 
-		if (room.filterStretching && message.match(/(.+?)\1{7,}/i) && !user.can('mute', null, room)) {
+		if (room.filterStretching && message.match(/(.+?)\1{7,}/i)) {
 			return this.errorReply(`Your message contains too much stretching, which this room doesn't allow.`);
 		}
-		if (room.filterCaps && message.match(/[A-Z\s]{18,}/) && !user.can('mute', null, room)) {
+		if (room.filterCaps && message.match(/[A-Z\s]{18,}/)) {
 			return this.errorReply(`Your message contains too many capital letters, which this room doesn't allow.`);
+		}
+		if (room.filterEmojis && message.match(emojiRegex)) {
+			return this.errorReply(`Your message contains emojis, which this room doesn't allow.`);
 		}
 
 		return true;
@@ -349,6 +444,10 @@ class CommandContext {
 			return false;
 		}
 		return true;
+	}
+	checkGameFilter() {
+		if (!this.room || !this.room.game || !this.room.game.onChatMessage) return false;
+		return this.room.game.onChatMessage(this.message);
 	}
 	pmTransform(message) {
 		let prefix = `|pm|${this.user.getIdentity()}|${this.pmTarget.getIdentity()}|`;
@@ -425,21 +524,22 @@ class CommandContext {
 	sendModCommand(data) {
 		this.room.sendModCommand(data);
 	}
-	privateModCommand(data) {
+	privateModCommand(data, logOnlyText) {
 		this.room.sendModCommand(data);
 		this.logEntry(data);
-		this.room.modlog(data);
+		this.room.modlog(data + (logOnlyText || ""));
 	}
-	globalModlog(action, user, text) {
-		let buf = "(" + this.room.id + ") " + action + ": ";
+	globalModlog(action, user, note) {
+		let buf = `(${this.room.id}) ${action}: `;
 		if (typeof user === 'string') {
-			buf += "[" + toId(user) + "]";
+			buf += `[${toId(user)}]`;
 		} else {
 			let userid = user.getLastId();
-			buf += "[" + userid + "]";
-			if (user.autoconfirmed && user.autoconfirmed !== userid) buf += " ac:[" + user.autoconfirmed + "]";
+			buf += `[${userid}]`;
+			if (user.autoconfirmed && user.autoconfirmed !== userid) buf += ` ac:[${user.autoconfirmed}]`;
+			buf += ` [${user.latestIp}]`;
 		}
-		buf += text;
+		buf += note;
 		Rooms.global.modlog(buf);
 	}
 	logEntry(data) {
@@ -512,6 +612,20 @@ class CommandContext {
 
 		return true;
 	}
+	meansYes(text) {
+		switch (text.toLowerCase().trim()) {
+		case 'on': case 'enable': case 'yes': case 'true':
+			return true;
+		}
+		return false;
+	}
+	meansNo(text) {
+		switch (text.toLowerCase().trim()) {
+		case 'off': case 'disable': case 'no': case 'false':
+			return true;
+		}
+		return false;
+	}
 	canTalk(message, room, targetUser) {
 		if (room === undefined) room = this.room;
 		if (targetUser === undefined && this.pmTarget) {
@@ -563,9 +677,9 @@ class CommandContext {
 				if (targetUser.locked && !user.can('lock')) {
 					return this.errorReply(`The user "${targetUser.name}" is locked and cannot be PMed.`);
 				}
-				if (Config.pmmodchat && !user.authAtLeast(Config.pmmodchat)) {
+				if (Config.pmmodchat && !user.authAtLeast(Config.pmmodchat) && !targetUser.canPromote(user.group, Config.pmmodchat)) {
 					let groupName = Config.groups[Config.pmmodchat] && Config.groups[Config.pmmodchat].name || Config.pmmodchat;
-					return this.errorReply(`Because moderated chat is set, you must be of rank ${groupName} or higher to PM users.`);
+					return this.errorReply(`On this server, you must be of rank ${groupName} or higher to PM users.`);
 				}
 				if (targetUser.ignorePMs && targetUser.ignorePMs !== user.group && !user.can('lock')) {
 					if (!targetUser.can('lock')) {
@@ -599,6 +713,14 @@ class CommandContext {
 				return false;
 			}
 
+			// If the corresponding config option is set, non-AC users cannot send links, except to staff.
+			if (Config.restrictLinks && !user.autoconfirmed && message.match(Chat.linkRegex)) {
+				if (!(targetUser && targetUser.can('lock'))) {
+					this.errorReply("Your account must be autoconfirmed to send links to other users, except for global staff.");
+					return false;
+				}
+			}
+
 			if (!this.checkFormat(room, user, message)) {
 				return false;
 			}
@@ -608,7 +730,7 @@ class CommandContext {
 				return false;
 			}
 
-			if (!this.checkBanwords(room, user.name)) {
+			if (!this.checkBanwords(room, user.name) && !user.can('bypassall')) {
 				this.errorReply(`Your username contains a phrase banned by this room.`);
 				return false;
 			}
@@ -617,9 +739,15 @@ class CommandContext {
 				return false;
 			}
 
+			let gameFilter = this.checkGameFilter();
+			if (gameFilter && !user.can('bypassall')) {
+				this.errorReply(gameFilter);
+				return false;
+			}
+
 			if (room) {
 				let normalized = message.trim();
-				if (room.id === 'lobby' && (normalized === user.lastMessage) &&
+				if ((room.id === 'lobby' || room.id === 'help') && (normalized === user.lastMessage) &&
 						((Date.now() - user.lastMessageTime) < MESSAGE_COOLDOWN)) {
 					this.errorReply("You can't send the same message again so soon.");
 					return false;
@@ -628,8 +756,8 @@ class CommandContext {
 				user.lastMessageTime = Date.now();
 			}
 
-			if (Config.chatfilter) {
-				return Config.chatfilter.call(this, message, user, room, connection, targetUser);
+			if (Chat.filters.length) {
+				return Chat.filter.call(this, message, user, room, connection, targetUser);
 			}
 			return message;
 		}
@@ -641,7 +769,7 @@ class CommandContext {
 		if (uri.startsWith('//')) return uri;
 		if (uri.startsWith('data:')) return uri;
 		if (!uri.startsWith('http://')) {
-			if (/^[a-z]+\:\/\//.test(uri) || isRelative) {
+			if (/^[a-z]+:\/\//.test(uri) || isRelative) {
 				return this.errorReply("URIs must begin with 'https://' or 'http://' or 'data:'");
 			}
 		} else {
@@ -694,7 +822,7 @@ class CommandContext {
 				this.errorReply('All images must have a width and height attribute');
 				return false;
 			}
-			let srcMatch = /src\s*\=\s*"?([^ "]+)(\s*")?/i.exec(match[0]);
+			let srcMatch = /src\s*=\s*"?([^ "]+)(\s*")?/i.exec(match[0]);
 			if (srcMatch) {
 				let uri = this.canEmbedURI(srcMatch[1], true);
 				if (!uri) return false;
@@ -703,7 +831,7 @@ class CommandContext {
 				images.lastIndex = match.index + 11;
 			}
 		}
-		if ((this.room.isPersonal || this.room.isPrivate === true) && !this.user.can('lock') && html.replace(/\s*style\s*=\s*\"?[^\"]*\"\s*>/g, '>').match(/<button[^>]/)) {
+		if ((this.room.isPersonal || this.room.isPrivate === true) && !this.user.can('lock') && html.replace(/\s*style\s*=\s*"?[^"]*"\s*>/g, '>').match(/<button[^>]/)) {
 			this.errorReply('You do not have permission to use scripted buttons in HTML.');
 			this.errorReply('If you just want to link to a room, you can do this: <a href="/roomid"><button>button contents</button></a>');
 			return false;
@@ -714,11 +842,10 @@ class CommandContext {
 		}
 
 		// check for mismatched tags
-		let tags = html.toLowerCase().match(/<\/?(div|a|button|b|strong|em|i|u|center|font|marquee|blink|details|summary|code)\b/g);
+		let tags = html.toLowerCase().match(/<\/?(div|a|button|b|strong|em|i|u|center|font|marquee|blink|details|summary|code|table|td|tr)\b/g);
 		if (tags) {
 			let stack = [];
-			for (let i = 0; i < tags.length; i++) {
-				let tag = tags[i];
+			for (const tag of tags) {
 				if (tag.charAt(1) === '/') {
 					if (!stack.length) {
 						this.errorReply("Extraneous </" + tag.substr(2) + "> without an opening tag.");
@@ -779,7 +906,7 @@ Chat.CommandContext = CommandContext;
  * Usage:
  *   Chat.parse(message, room, user, connection)
  *
- * Parses the message. If it's a command, the commnad is executed, if
+ * Parses the message. If it's a command, the command is executed, if
  * not, it's displayed directly in the room.
  *
  * Examples:
@@ -801,10 +928,18 @@ Chat.CommandContext = CommandContext;
  * @param {Connection} connection - the connection the user sent the message from
  */
 Chat.parse = function (message, room, user, connection) {
-	Chat.loadCommands();
+	Chat.loadPlugins();
 	let context = new CommandContext({message, room, user, connection});
 
 	return context.parse();
+};
+
+Chat.sendPM = function (message, user, pmTarget) {
+	let buf = `|pm|${user.getIdentity()}|${pmTarget.getIdentity()}|${message}`;
+	user.send(buf);
+	if (pmTarget !== user) pmTarget.send(buf);
+	pmTarget.lastPM = user.userid;
+	user.lastPM = pmTarget.userid;
 };
 
 Chat.package = {};
@@ -827,25 +962,38 @@ Chat.uncacheTree = function (root) {
 	} while (uncache.length > 0);
 };
 
-Chat.loadCommands = function () {
+Chat.loadPlugins = function () {
 	if (Chat.commands) return;
 
-	fs.readFile(path.resolve(__dirname, 'package.json'), (err, data) => {
-		if (err) return;
-		Chat.package = JSON.parse(data);
+	FS('package.json').readTextIfExists().then(data => {
+		if (data) Chat.package = JSON.parse(data);
 	});
 
-	let baseCommands = Chat.baseCommands = require('./chat-commands').commands;
-	let commands = Chat.commands = Object.assign({}, baseCommands);
+	// prevent TypeScript from resolving
+	const baseCommands = './chat-commands';
+	Chat.baseCommands = require(baseCommands).commands;
+	let commands = Chat.commands = Object.assign({}, Chat.baseCommands);
 
-	// Install plug-in commands
+	if (Config.chatfilter) Chat.filters.push(Config.chatfilter);
+	if (Config.namefilter) Chat.namefilters.push(Config.namefilter);
+	if (Config.hostfilter) Chat.hostfilters.push(Config.hostfilter);
+
+	// Install plug-in commands and chat filters
 
 	// info always goes first so other plugins can shadow it
-	Object.assign(commands, require('./chat-plugins/info').commands);
+	let files = FS('chat-plugins/').readdirSync();
+	files = files.filter(file => file !== 'info.js');
+	files.unshift('info.js');
 
-	for (let file of fs.readdirSync(path.resolve(__dirname, 'chat-plugins'))) {
-		if (file.substr(-3) !== '.js' || file === 'info.js') continue;
-		Object.assign(commands, require('./chat-plugins/' + file).commands);
+	for (const file of files) {
+		if (file.substr(-3) !== '.js') continue;
+		const plugin = require(`./chat-plugins/${file}`);
+
+		Object.assign(commands, plugin.commands);
+
+		if (plugin.chatfilter) Chat.filters.push(plugin.chatfilter);
+		if (plugin.namefilter) Chat.namefilters.push(plugin.namefilter);
+		if (plugin.hostfilter) Chat.hostfilters.push(plugin.hostfilter);
 	}
 };
 
@@ -858,6 +1006,17 @@ Chat.loadCommands = function () {
 Chat.escapeHTML = function (str) {
 	if (!str) return '';
 	return ('' + str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;').replace(/\//g, '&#x2f;');
+};
+
+/**
+ * Strips HTML from a string.
+ *
+ * @param {string} html
+ * @return {string}
+ */
+Chat.stripHTML = function (html) {
+	if (!html) return '';
+	return html.replace(/<[^>]*>/g, '');
 };
 
 /**
@@ -948,3 +1107,103 @@ Chat.toDurationString = function (number, options) {
 	}
 	return parts.slice(positiveIndex).reverse().map((value, index) => value ? value + " " + unitNames[index] + (value > 1 ? "s" : "") : "").reverse().slice(0, precision).join(" ").trim();
 };
+
+/**
+ * Takes an array and turns it into a sentence string by adding commas and the word 'and' at the end
+ *
+ * @param  {array} array
+ * @return {string}
+ */
+Chat.toListString = function (array) {
+	if (!array.length) return '';
+	if (array.length === 1) return array[0];
+	return `${array.slice(0, -1).join(", ")} and ${array.slice(-1)}`;
+};
+
+Chat.getDataPokemonHTML = function (template, gen = 7) {
+	if (typeof template === 'string') template = Object.assign({}, Dex.getTemplate(template));
+	let buf = '<li class="result">';
+	buf += '<span class="col numcol">' + (template.tier) + '</span> ';
+	buf += `<span class="col iconcol"><psicon pokemon="${template.id}"/></span> `;
+	buf += '<span class="col pokemonnamecol" style="white-space:nowrap"><a href="https://pokemonshowdown.com/dex/pokemon/' + template.id + '" target="_blank">' + template.species + '</a></span> ';
+	buf += '<span class="col typecol">';
+	if (template.types) {
+		for (const type of template.types) {
+			buf += `<img src="https://play.pokemonshowdown.com/sprites/types/${type}.png" alt="${type}" height="14" width="32">`;
+		}
+	}
+	buf += '</span> ';
+	if (gen >= 3) {
+		buf += '<span style="float:left;min-height:26px">';
+		if (template.abilities['1'] && (gen >= 4 || Dex.getAbility(template.abilities['1']).gen === 3)) {
+			buf += '<span class="col twoabilitycol">' + template.abilities['0'] + '<br />' + template.abilities['1'] + '</span>';
+		} else {
+			buf += '<span class="col abilitycol">' + template.abilities['0'] + '</span>';
+		}
+		if (template.abilities['S']) {
+			buf += '<span class="col twoabilitycol' + (template.unreleasedHidden ? ' unreleasedhacol' : '') + '"><em>' + template.abilities['H'] + '<br />' + template.abilities['S'] + '</em></span>';
+		} else if (template.abilities['H']) {
+			buf += '<span class="col abilitycol' + (template.unreleasedHidden ? ' unreleasedhacol' : '') + '"><em>' + template.abilities['H'] + '</em></span>';
+		} else {
+			buf += '<span class="col abilitycol"></span>';
+		}
+		buf += '</span>';
+	}
+	let bst = 0;
+	for (let i in template.baseStats) {
+		bst += template.baseStats[i];
+	}
+	buf += '<span style="float:left;min-height:26px">';
+	buf += '<span class="col statcol"><em>HP</em><br />' + template.baseStats.hp + '</span> ';
+	buf += '<span class="col statcol"><em>Atk</em><br />' + template.baseStats.atk + '</span> ';
+	buf += '<span class="col statcol"><em>Def</em><br />' + template.baseStats.def + '</span> ';
+	if (gen <= 1) {
+		bst -= template.baseStats.spd;
+		buf += '<span class="col statcol"><em>Spc</em><br />' + template.baseStats.spa + '</span> ';
+	} else {
+		buf += '<span class="col statcol"><em>SpA</em><br />' + template.baseStats.spa + '</span> ';
+		buf += '<span class="col statcol"><em>SpD</em><br />' + template.baseStats.spd + '</span> ';
+	}
+	buf += '<span class="col statcol"><em>Spe</em><br />' + template.baseStats.spe + '</span> ';
+	buf += '<span class="col bstcol"><em>BST<br />' + bst + '</em></span> ';
+	buf += '</span>';
+	buf += '</li>';
+	return `<div class="message"><ul class="utilichart">${buf}<li style="clear:both"></li></ul></div>`;
+};
+
+Chat.getDataMoveHTML = function (move) {
+	if (typeof move === 'string') move = Object.assign({}, Dex.getMove(move));
+	let buf = `<ul class="utilichart"><li class="result">`;
+	buf += `<span class="col movenamecol"><a href="https://pokemonshowdown.com/dex/moves/${move.id}">${move.name}</a></span> `;
+	buf += `<span class="col typecol"><img src="//play.pokemonshowdown.com/sprites/types/${move.type}.png" alt="${move.type}" width="32" height="14">`;
+	buf += `<img src="//play.pokemonshowdown.com/sprites/categories/${move.category}.png" alt="${move.category}" width="32" height="14"></span> `;
+	if (move.basePower) buf += `<span class="col labelcol"><em>Power</em><br>${typeof move.basePower === 'number' ? move.basePower : '—'}</span> `;
+	buf += `<span class="col widelabelcol"><em>Accuracy</em><br>${typeof move.accuracy === 'number' ? (move.accuracy + '%') : '—'}</span> `;
+	const basePP = move.pp || 1;
+	const pp = Math.floor(move.noPPBoosts ? basePP : basePP * 8 / 5);
+	buf += `<span class="col pplabelcol"><em>PP</em><br>${pp}</span> `;
+	buf += `<span class="col movedesccol">${move.shortDesc || move.desc}</span> `;
+	buf += `</li><li style="clear:both"></li></ul>`;
+	return buf;
+};
+
+Chat.getDataAbilityHTML = function (ability) {
+	if (typeof ability === 'string') ability = Object.assign({}, Dex.getAbility(ability));
+	let buf = `<ul class="utilichart"><li class="result">`;
+	buf += `<span class="col namecol"><a href="https://pokemonshowdown.com/dex/abilities/${ability.id}">${ability.name}</a></span> `;
+	buf += `<span class="col abilitydesccol">${ability.shortDesc || ability.desc}</span> `;
+	buf += `</li><li style="clear:both"></li></ul>`;
+	return buf;
+};
+
+Chat.getDataItemHTML = function (item) {
+	if (typeof item === 'string') item = Object.assign({}, Dex.getItem(item));
+	let buf = `<ul class="utilichart"><li class="result">`;
+	buf += `<span class="col itemiconcol"><psicon item="${item.id}"></span> <span class="col namecol"><a href="https://pokemonshowdown.com/dex/items/${item.id}">${item.name}</a></span> `;
+	buf += `<span class="col itemdesccol">${item.shortDesc || item.desc}</span> `;
+	buf += `</li><li style="clear:both"></li></ul>`;
+	return buf;
+};
+
+Chat.formatText = require('./chat-formatter').formatText;
+Chat.linkRegex = require('./chat-formatter').linkRegex;

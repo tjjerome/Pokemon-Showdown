@@ -12,7 +12,7 @@ exports.BattleStatuses = {
 				this.add('-status', target, 'brn');
 			}
 		},
-		// Damage reduction is handled directly in the battle-engine.js damage function
+		// Damage reduction is handled directly in the sim/battle.js damage function
 		onResidualOrder: 9,
 		onResidual: function (pokemon) {
 			this.damage(pokemon.maxhp / 16);
@@ -173,6 +173,7 @@ exports.BattleStatuses = {
 			if (this.random(3) > 0) {
 				return;
 			}
+			this.activeTarget = pokemon;
 			this.damage(this.getDamage(pokemon, pokemon, 40), pokemon, pokemon, {
 				id: 'confused',
 				effectType: 'Move',
@@ -284,8 +285,21 @@ exports.BattleStatuses = {
 	},
 	choicelock: {
 		onStart: function (pokemon) {
-			if (!this.activeMove.id || this.activeMove.sourceEffect && this.activeMove.sourceEffect !== this.activeMove.id) return false;
+			if (!this.activeMove.id || this.activeMove.hasBounced) return false;
 			this.effectData.move = this.activeMove.id;
+		},
+		onBeforeMove: function (pokemon, target, move) {
+			if (!pokemon.getItem().isChoice || !pokemon.hasMove(this.effectData.move)) {
+				pokemon.removeVolatile('choicelock');
+				return;
+			}
+			if (move.id !== this.effectData.move && move.id !== 'struggle') {
+				// Fails even if the Choice item is being ignored, and no PP is lost
+				this.addMove('move', pokemon, move.name);
+				this.attrLastMove('[still]');
+				this.add('-fail', pokemon);
+				return false;
+			}
 		},
 		onDisableMove: function (pokemon) {
 			if (!pokemon.getItem().isChoice || !pokemon.hasMove(this.effectData.move)) {
@@ -409,6 +423,7 @@ exports.BattleStatuses = {
 			return this.chainModify([0x14CD, 0x1000]);
 		},
 	},
+<<<<<<< HEAD
 	aura: {
 		duration: 1,
 		onBasePowerPriority: 8,
@@ -429,6 +444,8 @@ exports.BattleStatuses = {
 			return 0;
 		},
 	},
+=======
+>>>>>>> 710d47d7fa78703de2a1016259788f1f92fa7900
 
 	// weather is implemented here since it's so important to the game
 
