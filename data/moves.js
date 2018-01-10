@@ -585,6 +585,30 @@ exports.BattleMovedex = {
 		zMovePower: 175,
 		contestType: "Beautiful",
 	},
+	"arcflash": {
+		num: 315,
+		accuracy: 90,
+		basePower: 130,
+		category: "Special",
+		desc: "Lowers the user's Special Attack by 2 stages.",
+		shortDesc: "Lowers the user's Sp. Atk by 2.",
+		id: "arcflash",
+		isViable: true,
+		name: "Arcflash",
+		pp: 5,
+		priority: 0,
+		flags: {protect: 1, mirror: 1},
+		self: {
+			boosts: {
+				spa: -2,
+			},
+		},
+		secondary: false,
+		target: "normal",
+		type: "Electric",
+		zMovePower: 195,
+		contestType: "Beautiful",
+	},
 	"arcticbeam": {
 		num: 59,
 		accuracy: 80,
@@ -607,6 +631,60 @@ exports.BattleMovedex = {
 		},
 		target: "normal",
 		type: "Ice"
+	},
+	"arcticterrain": {
+		num: 580,
+		accuracy: true,
+		basePower: 0,
+		category: "Status",
+		desc: "For 5 turns, the terrain becomes Arctic Terrain. During the effect, the power of Ice-type attacks used by grounded Pokemon is multiplied by 1.5 and burns are prevented. Camouflage transforms the user into a Ice type, Nature Power becomes Ice Beam, and Secret Power has a 30% chance to freeze. Fails if the current terrain is Arctic Terrain.",
+		shortDesc: "5 turns. Grounded: +Ice power,-burns.",
+		id: "arcticterrain",
+		name: "Arctic Terrain",
+		pp: 10,
+		priority: 0,
+		flags: {nonsky: 1},
+		terrain: 'arcticterrain',
+		effect: {
+			duration: 5,
+			durationCallback: function (source, effect) {
+				if (source && source.hasItem('terrainextender')) {
+					return 8;
+				}
+				return 5;
+			},
+			onSetStatus: function (status, target, source, effect) {
+				if (status.id === 'brn' && target.isGrounded() && !target.isSemiInvulnerable()) {
+					if (effect.effectType === 'Move' && !effect.secondaries) {
+						this.add('-activate', target, 'move: Arctic Terrain');
+					}
+					return false;
+				}
+			},
+			onBasePower: function (basePower, attacker, defender, move) {
+				if (move.type === 'Ice' && attacker.isGrounded() && !attacker.isSemiInvulnerable()) {
+					this.debug('arctic terrain boost');
+					return this.chainModify(1.5);
+				}
+			},
+			onStart: function (battle, source, effect) {
+				if (effect && effect.effectType === 'Ability') {
+					this.add('-fieldstart', 'move: Arctic Terrain', '[from] ability: ' + effect, '[of] ' + source);
+				} else {
+					this.add('-fieldstart', 'move: Arctic Terrain');
+				}
+			},
+			onResidualOrder: 21,
+			onResidualSubOrder: 2,
+			onEnd: function () {
+				this.add('-fieldend', 'move: Arctic Terrain');
+			},
+		},
+		secondary: false,
+		target: "all",
+		type: "Ice",
+		zMoveBoost: {spe: 1},
+		contestType: "Clever",
 	},
 	"armthrust": {
 		num: 292,
@@ -2629,6 +2707,28 @@ exports.BattleMovedex = {
 		zMovePower: 100,
 		contestType: "Tough",
 	},
+	"compleat": {
+		num: 487,
+		accuracy: 100,
+		basePower: 0,
+		category: "Status",
+		desc: "Causes the target to become a Steel type. Fails if the target is an Arceus.",
+		shortDesc: "Changes the target's type to Steel.",
+		id: "compleat",
+		name: "Compleat",
+		pp: 20,
+		priority: 0,
+		flags: {protect: 1, reflectable: 1, mirror: 1, mystery: 1},
+		onHit: function (target) {
+			if (!target.setType('Steel')) return false;
+			this.add('-start', target, 'typechange', 'Steel');
+		},
+		secondary: false,
+		target: "normal",
+		type: "Steel",
+		zMoveBoost: {spa: 1},
+		contestType: "Cute",
+	},
 	"confide": {
 		num: 590,
 		accuracy: true,
@@ -4410,6 +4510,32 @@ exports.BattleMovedex = {
 		type: "Dragon",
 		zMovePower: 100,
 		contestType: "Tough",
+	},
+	"dustdevil": {
+		num: 80,
+		accuracy: 100,
+		basePower: 120,
+		category: "Special",
+		desc: "Deals damage to one adjacent foe at random. The user spends two or three turns locked into this move and becomes confused after the last turn of the effect if it is not already. If the user is prevented from moving or the attack is not successful against the target on the first turn of the effect or the second turn of a three-turn effect, the effect ends without causing confusion. If this move is called by Sleep Talk, the move is used for one turn and does not confuse the user.",
+		shortDesc: "Lasts 2-3 turns. Confuses the user afterwards.",
+		id: "dustdevil",
+		name: "Dust Devil",
+		pp: 10,
+		priority: 0,
+		flags: {contact: 1, protect: 1, mirror: 1, dance: 1},
+		self: {
+			volatileStatus: 'lockedmove',
+		},
+		onAfterMove: function (pokemon) {
+			if (pokemon.volatiles['lockedmove'] && pokemon.volatiles['lockedmove'].duration === 1) {
+				pokemon.removeVolatile('lockedmove');
+			}
+		},
+		secondary: false,
+		target: "randomNormal",
+		type: "Ground",
+		zMovePower: 190,
+		contestType: "Beautiful",
 	},
 	"dynamicpunch": {
 		num: 223,
@@ -6847,6 +6973,28 @@ exports.BattleMovedex = {
 		target: "normal",
 		type: "Electric",
 		contestType: "Cool",
+	},
+	"glacialtackle": {
+		num: 58,
+		accuracy: 100,
+		basePower: 90,
+		category: "Physical",
+		desc: "Has a 10% chance to freeze the target.",
+		shortDesc: "10% chance to freeze the target.",
+		id: "glacialtackle",
+		isViable: true,
+		name: "Glacial Tackle",
+		pp: 10,
+		priority: 0,
+		flags: {protect: 1, mirror: 1},
+		secondary: {
+			chance: 10,
+			status: 'frz',
+		},
+		target: "normal",
+		type: "Ice",
+		zMovePower: 175,
+		contestType: "Beautiful",
 	},
 	"glaciate": {
 		num: 549,

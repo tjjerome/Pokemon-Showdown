@@ -187,6 +187,16 @@ exports.BattleAbilities = {
 		rating: 1,
 		num: 107,
 	},
+	"arcticcircle": {
+		shortDesc: "On switch-in, this Pokemon summons Arctic Terrain.",
+		onStart: function (source) {
+			this.setTerrain('arcticterrain');
+		},
+		id: "arcticcircle",
+		name: "Arctic Circle",
+		rating: 4,
+		num: 229,
+	},
 	"arenatrap": {
 		desc: "Prevents adjacent opposing Pokemon from choosing to switch out unless they are immune to trapping or are airborne.",
 		shortDesc: "Prevents adjacent foes from choosing to switch unless they are airborne.",
@@ -607,6 +617,27 @@ exports.BattleAbilities = {
 		name: "Conditioning",
 		rating: 4,
 		num: 126
+	},
+	"conductivefrill": {
+		shortDesc: "This Pokemon's attacking stat is multiplied by 1.5 while using an Electric-type attack.",
+		onModifyAtkPriority: 5,
+		onModifyAtk: function (atk, attacker, defender, move) {
+			if (move.type === 'Electric') {
+				this.debug('Conductive Frill boost');
+				return this.chainModify(1.5);
+			}
+		},
+		onModifySpAPriority: 5,
+		onModifySpA: function (atk, attacker, defender, move) {
+			if (move.type === 'Electric') {
+				this.debug('Conductive Frill boost');
+				return this.chainModify(1.5);
+			}
+		},
+		id: "conductivefrill",
+		name: "Conductive Frill",
+		rating: 3,
+		num: 200,
 	},
 	"contrary": {
 		shortDesc: "If this Pokemon has a stat stage raised it is lowered instead, and vice versa.",
@@ -1550,6 +1581,18 @@ exports.BattleAbilities = {
 		rating: 3.5,
 		num: 26
 	},
+	"heatgenerator": {
+		shortDesc: "This Pokemon's Attack is raised by 1 stage after it is damaged by a Fire-type move.",
+		onAfterDamage: function (damage, target, source, effect) {
+			if (effect && effect.type === 'Fire') {
+				this.boost({atk: 1});
+			}
+		},
+		id: "heatgenerator",
+		name: "Heat Generator",
+		rating: 2,
+		num: 154,
+	},
 	"heatproof": {
 		desc: "The power of Fire-type attacks against this Pokemon is halved, and burn damage taken is halved.",
 		shortDesc: "The power of Fire-type attacks against this Pokemon is halved; burn damage halved.",
@@ -1704,6 +1747,25 @@ exports.BattleAbilities = {
 		name: "Ice Body",
 		rating: 1.5,
 		num: 115,
+	},
+	"ichor": {
+		desc: "This Pokemon loses 1/16 of its maximum HP, rounded down, at the end of each turn. Pokemon making contact with this Pokemon have their Ability changed to Ichor. Does not affect the Abilities Multitype or Stance Change.",
+		shortDesc: "This Pokemon takes damage every turn. Pokemon making contact with this Pokemon have their Ability changed to Ichor.",
+		id: "ichor",
+		name: "Ichor",
+		onAfterDamage: function (damage, target, source, move) {
+			if (source && source !== target && move && move.flags['contact'] && source.ability !== 'ichor') {
+				let oldAbility = source.setAbility('ichor', source);
+				if (oldAbility) {
+					this.add('-activate', target, 'ability: Ichor', this.getAbility(oldAbility).name, '[of] ' + source);
+				}
+			}
+		},
+		onResidual: function (pokemon) {
+			this.damage(target.maxhp / 16, target, target);
+		},
+		rating: 2,
+		num: 152,
 	},
 	"illuminate": {
 		shortDesc: "No competitive use.",
@@ -3946,6 +4008,28 @@ exports.BattleAbilities = {
 		name: "Suction Cups",
 		rating: 1.5,
 		num: 21,
+	},
+	"superconductor": {
+		desc: "This Pokemon's Speed is raised by 2 stages for each of its stat stages that is lowered by an opposing Pokemon.",
+		shortDesc: "This Pokemon's Speed is raised by 2 for each of its stats that is lowered by a foe.",
+		onAfterEachBoost: function (boost, target, source) {
+			if (!source || target.side === source.side) {
+				return;
+			}
+			let statsLowered = false;
+			for (let i in boost) {
+				if (boost[i] < 0) {
+					statsLowered = true;
+				}
+			}
+			if (statsLowered) {
+				this.boost({spe: 2}, target, target, null, true);
+			}
+		},
+		id: "superconductor",
+		name: "Superconductor",
+		rating: 2.5,
+		num: 128,
 	},
 	"superluck": {
 		shortDesc: "This Pokemon's critical hit ratio is raised by 1 stage.",
