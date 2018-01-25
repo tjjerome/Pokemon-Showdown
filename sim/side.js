@@ -11,17 +11,17 @@ const Pokemon = require('./pokemon');
 /**
  * An object representing a single action that can be chosen.
  *
- * @typedef {Object} Action
- * @property {string} choice - a choice
- * @property {Pokemon} [pokemon] - the pokemon making the choice
- * @property {number} [targetLoc] - location of the target, relative to pokemon's side
- * @property {string} [move] - a move to use
- * @property {Pokemon} [target] - the target of the choice
- * @property {number} [index] - the chosen index in team preview
- * @property {number} [priority] - priority of the chosen index
- * @property {Side} [side] - the pokemon's side
- * @property {?boolean} [mega] - true if megaing
+ * @typedef {Object} ChosenAction
+ * @property {'move' | 'switch' | 'instaswitch' | 'team' | 'shift' | 'pass'} choice - action type
+ * @property {Pokemon} [pokemon] - the pokemon doing the action
+ * @property {number} [targetLoc] - relative location of the target to pokemon (move action only)
+ * @property {string} [moveid] - a move to use (move action only)
+ * @property {Pokemon} [target] - the target of the action
+ * @property {number} [index] - the chosen index in Team Preview
+ * @property {Side} [side] - the action's side
+ * @property {?boolean} [mega] - true if megaing or ultra bursting
  * @property {?boolean} [zmove] - true if zmoving
+ * @property {number} [priority] - priority of the action
  */
 
 /**
@@ -30,12 +30,13 @@ const Pokemon = require('./pokemon');
  * @typedef {Object} Choice
  * @property {boolean} cantUndo - true if the choice can't be cancelled because of the maybeTrapped issue
  * @property {string} error - contains error text in the case of a choice error
- * @property {Action[]} actions - array of chosen actions
+ * @property {ChosenAction[]} actions - array of chosen actions
  * @property {number} forcedSwitchesLeft - number of switches left that need to be performed
  * @property {number} forcedPassesLeft - number of passes left that need to be performed
  * @property {Set<number>} switchIns - indexes of pokemon chosen to switch in
  * @property {boolean} zMove - true if a Z-move has already been selected
  * @property {boolean} mega - true if a mega evolution has already been selected
+ * @property {boolean} ultra - true if an ultra burst has already been selected
  */
 
 class Side {
@@ -77,6 +78,7 @@ class Side {
 			switchIns: new Set(),
 			zMove: false,
 			mega: false,
+			ultra: false,
 		};
 		/**
 		 * Must be one of:
@@ -126,7 +128,7 @@ class Side {
 				if (action.targetLoc && this.active.length > 1) details += ` ${action.targetLoc}`;
 				if (action.mega) details += ` mega`;
 				if (action.zmove) details += ` zmove`;
-				return `move ${toId(action.move)}${details}`;
+				return `move ${action.moveid}${details}`;
 			case 'switch':
 			case 'instaswitch':
 				return `switch ${action.target.position + 1}`;
@@ -188,10 +190,10 @@ class Side {
 
 	/**
 	 * @param {string | Effect} status
-	 * @param {Pokemon} source
-	 * @param {Effect} sourceEffect
+	 * @param {Pokemon?} source
+	 * @param {Effect?} sourceEffect
 	 */
-	addSideCondition(status, source, sourceEffect) {
+	addSideCondition(status, source = null, sourceEffect = null) {
 		status = this.battle.getEffect(status);
 		if (this.sideConditions[status.id]) {
 			if (!status.onRestart) return false;
@@ -305,7 +307,7 @@ class Side {
 		if (!targetLoc) targetLoc = 0;
 
 		// Parse moveText (name or index)
-		// If the move is not found, the decision is invalid without requiring further inspection.
+		// If the move is not found, the action is invalid without requiring further inspection.
 
 		const requestMoves = pokemon.getRequestData().moves;
 		let moveid = '';
@@ -388,11 +390,11 @@ class Side {
 				choice: 'move',
 				pokemon: pokemon,
 				targetLoc: lockedMoveTarget || 0,
-				move: lockedMove,
+				moveid: toId(lockedMove),
 			});
 			return true;
 		} else if (!moves.length && !zMove) {
-			// Override decision and use Struggle if there are no enabled moves with PP
+			// Override action and use Struggle if there are no enabled moves with PP
 			// Gen 4 and earlier announce a Pokemon has no moves left before the turn begins, and only to that player's side.
 			if (this.battle.gen <= 4) this.send('-activate', pokemon, 'move: Struggle');
 			moveid = 'struggle';
@@ -429,13 +431,22 @@ class Side {
 			this.emitCallback('cantmega', pokemon);
 			return this.emitChoiceError(`Can't move: You can only mega-evolve once per battle`);
 		}
+		const ultra = (megaOrZ === 'ultra');
+		if (ultra && !pokemon.canUltraBurst) {
+			return this.emitChoiceError(`Can't move: ${pokemon.name} can't mega evolve`);
+		}
+		if (ultra && this.choice.ultra) {
+			// TODO: The client shouldn't have sent this request in the first place.
+			this.emitCallback('cantmega', pokemon);
+			return this.emitChoiceError(`Can't move: You can only ultra burst once per battle`);
+		}
 
 		this.choice.actions.push({
 			choice: 'move',
 			pokemon: pokemon,
 			targetLoc: targetLoc,
-			move: moveid,
-			mega: mega,
+			moveid: moveid,
+			mega: mega || ultra,
 			zmove: zMove,
 		});
 
@@ -444,9 +455,10 @@ class Side {
 		}
 
 		if (mega) this.choice.mega = true;
+		if (ultra) this.choice.ultra = true;
 		if (zMove) this.choice.zMove = true;
 
-		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkDecisions()) return this;
+		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkActions()) return this;
 		return true;
 	}
 
@@ -474,7 +486,20 @@ class Side {
 			slot = this.active.length;
 			while (this.choice.switchIns.has(slot) || this.pokemon[slot].fainted) slot++;
 		}
-		if (isNaN(slot) || slot >= this.pokemon.length) {
+		if (isNaN(slot) || slot < 0) {
+			// maybe it's a name!
+			slot = -1;
+			for (const [i, pokemon] of this.pokemon.entries()) {
+				if (slotText === pokemon.name) {
+					slot = i;
+					break;
+				}
+			}
+			if (slot < 0) {
+				return this.emitChoiceError(`Can't switch: You do not have a Pokémon named "${slotText}" to switch to`);
+			}
+		}
+		if (slot >= this.pokemon.length) {
 			return this.emitChoiceError(`Can't switch: You do not have a Pokémon in slot ${slot + 1} to switch to`);
 		} else if (slot < this.active.length) {
 			return this.emitChoiceError(`Can't switch: You can't switch to an active Pokémon`);
@@ -509,7 +534,7 @@ class Side {
 			target: targetPokemon,
 		});
 
-		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkDecisions()) return this;
+		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkActions()) return this;
 		return true;
 	}
 
@@ -561,7 +586,7 @@ class Side {
 			});
 		}
 
-		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkDecisions()) return this;
+		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkActions()) return this;
 		return true;
 	}
 
@@ -585,7 +610,7 @@ class Side {
 			pokemon: pokemon,
 		});
 
-		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkDecisions()) return this;
+		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkActions()) return this;
 		return true;
 	}
 
@@ -607,6 +632,7 @@ class Side {
 			switchIns: new Set(),
 			zMove: false,
 			mega: false,
+			ultra: false,
 		};
 	}
 
@@ -647,9 +673,11 @@ class Side {
 				}
 				const willMega = data.endsWith(' mega') ? 'mega' : '';
 				if (willMega) data = data.slice(0, -5);
+				const willUltra = data.endsWith(' ultra') ? 'ultra' : '';
+				if (willUltra) data = data.slice(0, -6);
 				const willZ = data.endsWith(' zmove') ? 'zmove' : '';
 				if (willZ) data = data.slice(0, -6);
-				this.chooseMove(data, targetLoc, willMega || willZ);
+				this.chooseMove(data, targetLoc, willMega || willUltra || willZ);
 				break;
 			case 'switch':
 				this.chooseSwitch(data);
@@ -737,7 +765,7 @@ class Side {
 		this.choice.actions.push({
 			choice: 'pass',
 		});
-		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkDecisions()) return this;
+		if (this.battle.LEGACY_API_DO_NOT_USE && !this.battle.checkActions()) return this;
 		return true;
 	}
 
