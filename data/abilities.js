@@ -2678,6 +2678,18 @@ exports.BattleAbilities = {
 		rating: 1.5,
 		num: 20,
 	},
+	"oxygenation": {
+		shortDesc: "This Pokemon's Special Defense is raised 2 stages after it is damaged by a Grass-type move.",
+		onAfterDamage: function (damage, target, source, effect) {
+			if (effect && effect.type === 'Grass') {
+				this.boost({spd: 2});
+			}
+		},
+		id: "oxygenation",
+		name: "Oxygenation",
+		rating: 2,
+		num: 195,
+	},
 	"parentalbond": {
 		desc: "This Pokemon's damaging moves become multi-hit moves that hit twice. The second hit has its damage quartered. Does not affect multi-hit moves or moves that have multiple targets.",
 		shortDesc: "This Pokemon's damaging moves hit twice. The second hit has its damage quartered.",

@@ -609,6 +609,30 @@ exports.BattleMovedex = {
 		zMovePower: 195,
 		contestType: "Beautiful",
 	},
+	"archeanseastrike": {
+		num: 710,
+		accuracy: 100,
+		basePower: 85,
+		category: "Physical",
+		desc: "If the target is a Steel type, lower the target's Defense by 1 stage.",
+		shortDesc: "Lowers the Defense of Steel types by 1.",
+		id: "archeanseastrike",
+		isViable: true,
+		name: "Archean Seastrike",
+		pp: 10,
+		priority: 0,
+		flags: {contact: 1, protect: 1, mirror: 1},
+		secondary: {
+			chance: 20,
+			boosts: {
+				def: -1,
+			},
+		},
+		target: "normal",
+		type: "Water",
+		zMovePower: 160,
+		contestType: "Cool",
+	},
 	"arcticbeam": {
 		num: 59,
 		accuracy: 80,
@@ -2243,6 +2267,8 @@ exports.BattleMovedex = {
 				newType = 'Fairy';
 			} else if (this.isTerrain('psychicterrain')) {
 				newType = 'Psychic';
+			} else if (this.isTerrain('arcticterrain')) {
+				newType = 'Ice';
 			}
 
 			if (!target.setType(newType)) return false;
@@ -6085,6 +6111,29 @@ exports.BattleMovedex = {
 		type: "Dark",
 		zMovePower: 100,
 		contestType: "Cute",
+	},
+	"floralbloom": {
+		num: 347,
+		accuracy: true,
+		basePower: 0,
+		category: "Status",
+		desc: "Raises the user's Special Attack and Special Defense by 1 stage.",
+		shortDesc: "Raises the user's Sp. Atk and Sp. Def by 1.",
+		id: "floralbloom",
+		isViable: true,
+		name: "FLoral Bloom",
+		pp: 20,
+		priority: 0,
+		flags: {snatch: 1},
+		boosts: {
+			spa: 1,
+			spd: 1,
+		},
+		secondary: false,
+		target: "self",
+		type: "Grass",
+		zMoveEffect: 'clearnegativeboost',
+		contestType: "Beautiful",
 	},
 	"floralhealing": {
 		num: 666,
@@ -16523,6 +16572,25 @@ exports.BattleMovedex = {
 		zMovePower: 100,
 		contestType: "Cute",
 	},
+	"spaghettification": {
+		num: 89,
+		accuracy: 90,
+		basePower: 110,
+		category: "Special",
+		desc: "Damage.",
+		shortDesc: "Damage",
+		id: "spaghettification",
+		isViable: true,
+		name: "Spaghettification",
+		pp: 10,
+		priority: 0,
+		flags: {protect: 1, mirror: 1, nonsky: 1},
+		secondary: false,
+		target: "normal",
+		type: "Dark",
+		zMovePower: 185,
+		contestType: "Tough",
+	},
 	"spectralthief": {
 		num: 712,
 		accuracy: 100,
@@ -18892,107 +18960,6 @@ exports.BattleMovedex = {
 		zMoveEffect: 'heal',
 		contestType: "Clever",
 	},
-	/*"trashheap": {
-		num: 507,
-		accuracy: 100,
-		basePower: 60,
-		category: "Physical",
-		desc: "This attack buries the target in trash with the user on the first turn and executes on the second. On the first turn, the user and the target avoid all attacks other than Sludge Bomb, Sludge Wave, and Toxic. The user and the target cannot make a move between turns, but the target can select a move to use. This move cannot damage Poison or Steel-type Pokemon. Fails on the first turn if the target is an ally or if the target has a substitute.",
-		shortDesc: "User and foe dig into trash turn 1. Damages on turn 2.",
-		id: "trashheap",
-		name: "Trash Heap",
-		pp: 10,
-		priority: 0,
-		flags: {contact: 1, charge: 1, protect: 1, mirror: 1, gravity: 1, distance: 1},
-		onTryHit: function (target, source, move) {
-			if (target.fainted) return false;
-			if (source.removeVolatile(move.id)) {
-				if (target !== source.volatiles['twoturnmove'].source) return false;
-
-				if (target.hasType('Poison') || target.hasType('Steel')) {
-					this.add('-immune', target, '[msg]');
-					this.add('-end', target, 'Trash Heap');
-					return null;
-				}
-			} else {
-				if (target.volatiles['substitute'] || target.side === source.side) {
-					return false;
-				}
-
-				this.add('-prepare', source, move.name, target);
-				source.addVolatile('twoturnmove', target);
-				return null;
-			}
-		},
-		onHit: function (target, source) {
-			this.add('-end', target, 'Trash Heap');
-		},
-		effect: {
-			duration: 2,
-			onStart: function () {
-				this.effectData.source.removeVolatile('followme');
-				this.effectData.source.removeVolatile('ragepowder');
-			},
-			onAnyDragOut: function (pokemon) {
-				if (pokemon === this.effectData.target || pokemon === this.effectData.source) return false;
-			},
-			onFoeModifyPokemon: function (defender) {
-				if (defender !== this.effectData.source) return;
-				defender.trapped = true;
-			},
-			onFoeBeforeMovePriority: 12,
-			onFoeBeforeMove: function (attacker, defender, move) {
-				if (attacker === this.effectData.source) {
-					this.debug('Sky drop nullifying.');
-					return null;
-				}
-			},
-			onRedirectTargetPriority: -99,
-			onRedirectTarget: function (target, source, source2) {
-				if (source !== this.effectData.target) return;
-				if (this.effectData.source.fainted) return;
-				return this.effectData.source;
-			},
-			onAnyAccuracy: function (accuracy, target, source, move) {
-				if (target !== this.effectData.target && target !== this.effectData.source) {
-					return;
-				}
-				if (source === this.effectData.target && target === this.effectData.source) {
-					return;
-				}
-				if (move.id === 'sludgebomb' || move.id === 'sludgewave') {
-					return;
-				}
-				if (move.id === 'toxic') {
-					return;
-				}
-				if (source.hasAbility('noguard') || target.hasAbility('noguard')) {
-					return;
-				}
-				if (source.volatiles['lockon'] && target === source.volatiles['lockon'].source) return;
-				return 0;
-			},
-			onAnyBasePower: function (basePower, target, source, move) {
-				if (target !== this.effectData.target && target !== this.effectData.source) {
-					return;
-				}
-				if (source === this.effectData.target && target === this.effectData.source) {
-					return;
-				}
-				if (move.id === 'sludgebomb' || move.id === 'sludgewave') {
-					return this.chainModify(2);
-				}
-			},
-			onFaint: function (target) {
-				if (target.volatiles['trashheap'] && target.volatiles['twoturnmove'].source) {
-					this.add('-end', target.volatiles['twoturnmove'].source, 'Trash Heap', '[interrupt]');
-				}
-			}
-		},
-		secondary: false,
-		target: "any",
-		type: "Poison"
-	},*/
 	"trashheap": {
 		num: 507,
 		accuracy: 100,
@@ -19093,6 +19060,28 @@ exports.BattleMovedex = {
 		target: "any",
 		type: "Poison",
 		contestType: "Tough",
+	},
+	"treeslam": {
+		num: 257,
+		accuracy: 90,
+		basePower: 95,
+		category: "Physical",
+		desc: "Has a 10% chance to paralyze the target.",
+		shortDesc: "10% chance to paralyze the foe(s).",
+		id: "treeslam",
+		isViable: true,
+		name: "Tree Slam",
+		pp: 10,
+		priority: 0,
+		flags: {protect: 1, mirror: 1},
+		secondary: {
+			chance: 10,
+			status: 'par',
+		},
+		target: "allAdjacentFoes",
+		type: "Grass",
+		zMovePower: 175,
+		contestType: "Beautiful",
 	},
 	"triattack": {
 		num: 161,
