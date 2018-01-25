@@ -269,12 +269,12 @@ exports.BattlePokedex = {
 		eggGroups: ["Bug"],
 		otherFormes: ["beedrillmega"],
 	},
-	beedrill???: {
+	beedrillalola: {
 		num: 15,
-		species: "Beedrill-???",
+		species: "Beedrill-Alola",
 		baseSpecies: "Beedrill",
-		forme: "???",
-		formeLetter: "?",
+		forme: "Alola",
+		formeLetter: "A",
 		types: ["Ground", "Fire"],
 		baseStats: {hp: 65, atk: 90, def: 50, spa: 35, spd: 70, spe: 85},
 		abilities: {0: "Water Veil", 1: "Huge Power", H: "Godlike"},

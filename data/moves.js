@@ -12622,7 +12622,7 @@ exports.BattleMovedex = {
 		target: "allAdjacent",
 		type: "Normal",
 		zMovePower: 180,
-	}
+	},
 	"photongeyser": {
 		num: 722,
 		accuracy: 100,
