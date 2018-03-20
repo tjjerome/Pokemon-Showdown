@@ -341,7 +341,7 @@ exports.grouplist = [
 		id: "leader",
 		name: "Leader",
 		inherit: '@',
-		jurisdiction: '@u',
+		jurisdiction: 'u',
 		promote: 'u',
 		roomowner: true,
 		roombot: true,
@@ -358,6 +358,7 @@ exports.grouplist = [
 		globalonly: true,
 		tournamentsmanagement: true,
 		gamemanagement: true,
+		exportinputlog: true,
 	},
 	{
 		symbol: '#',
@@ -389,6 +390,7 @@ exports.grouplist = [
 		roomonly: true,
 		tournamentsmanagement: true,
 		gamemanagement: true,
+		joinbattle: true,
 	},
 	{
 		symbol: '\u2606',
